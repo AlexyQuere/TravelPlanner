@@ -13,6 +13,7 @@ import Timeline from "./Timeline";
 import TransportTimeCard from "./TransportTimeCard";
 import React from "react";
 import { useEffect } from "react";
+import { reverseGeocode, getPlaceImage } from "../utils/place";
 
 export default function TravelMap({
   destinations,
@@ -38,6 +39,9 @@ export default function TravelMap({
   onOptimizeOrder,
   onResetOrder,
   onExport,
+  onAddDestination,
+  onDeleteDestination,
+  onUpdateDestination,
 }) {
   const mapRef = useRef(null);
   const [size, setSize] = useState({ width: 1200, height: 720 });
@@ -146,6 +150,52 @@ export default function TravelMap({
     setZoom(INITIAL_ZOOM);
   }
 
+  async function handleDoubleClick(event) {
+    event.preventDefault();
+
+    const rect = mapRef.current.getBoundingClientRect();
+
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const centerWorld = lngLatToWorld(center.lng, center.lat, zoom);
+
+    const worldX = centerWorld.x + clickX - size.width / 2;
+    const worldY = centerWorld.y + clickY - size.height / 2;
+
+    const { lat, lng } = worldToLngLat(worldX, worldY, zoom);
+
+    try {
+      const place = await reverseGeocode(lat, lng);
+      const image = await getPlaceImage(lat, lng);
+
+      onAddDestination({
+        city: place.city,
+        country: place.country,
+        dates: "",
+        lat,
+        lng,
+        image,
+        transport: "",
+        notes: "",
+      });
+    } catch (error) {
+      console.error(error);
+
+      onAddDestination({
+        city: "Nouvelle étape",
+        country: "",
+        dates: "",
+        lat,
+        lng,
+        image:
+          "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1200px-No_image_available.svg.png",
+        transport: "",
+        notes: "",
+      });
+    }
+  }
+
   return (
     <div
       ref={mapRef}
@@ -157,6 +207,7 @@ export default function TravelMap({
       onPointerUp={stopPan}
       onPointerLeave={stopPan}
       onWheel={handleWheel}
+      onDoubleClick={handleDoubleClick}
     >
       <MapTiles center={center} zoom={zoom} width={size.width} height={size.height} />
 
@@ -304,6 +355,8 @@ export default function TravelMap({
             onAddItem={onAddItem}
             onDeleteItem={onDeleteItem}
             onUpdateItem={onUpdateItem}
+            onDeleteDestination={onDeleteDestination}
+            onUpdateDestination={onUpdateDestination}
           />
         </div>
       )}

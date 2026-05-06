@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TravelMap from "./components/TravelMap";
 import { trip } from "./data/trip";
-import { createTrip, loadTrip, saveTrip } from "./tripService";
+import { createTrip, loadTrip, saveTrip, listTrips, deleteTrip } from "./tripService";
 
 function normalizeTripData(destinations) {
   return destinations.map((destination) => ({
@@ -58,32 +58,38 @@ export default function App() {
   []
 );
 
-const isOptimized = false;
+  const isOptimized = false;
 
-function exportTrip() {
-  const payload = {
-    trip: {
-      ...trip,
-      destinations: orderedDestinations,
-    },
-    checkedItems,
-    favoriteCities,
-    exportedAt: new Date().toISOString(),
-  };
+  const [tripsList, setTripsList] = useState([]);
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: "application/json",
-  });
+  useEffect(() => {
+        refreshTrips();
+      }, []);
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  function exportTrip() {
+    const payload = {
+      trip: {
+        ...trip,
+        destinations: orderedDestinations,
+      },
+      checkedItems,
+      favoriteCities,
+      exportedAt: new Date().toISOString(),
+    };
 
-  link.href = url;
-  link.download = "travel-itinerary.json";
-  link.click();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
 
-  URL.revokeObjectURL(url);
-}
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "travel-itinerary.json";
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -257,6 +263,152 @@ function exportTrip() {
     );
   }
 
+  function addDestination(data = {}) {
+    const newId = Date.now();
+
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+
+    const destination = {
+      id: newId,
+      city: data.city || "Nouvelle étape",
+      country: data.country || "",
+      dates: data.dates || "",
+      lat: Number.isFinite(lat) ? lat : -8.5069,
+      lng: Number.isFinite(lng) ? lng : 115.2625,
+      status: "À préparer",
+      image:
+        data.image ||
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/1200px-No_image_available.svg.png",
+      transport: data.transport || "",
+      notes: data.notes || "",
+      budget: { hotel: 0, food: 0, activities: 0, transport: 0 },
+      categories: [
+        { id: `${newId}-admin`, type: "admin", title: "Administratif", items: [] },
+        { id: `${newId}-activity`, type: "activity", title: "Activités", items: [] },
+        { id: `${newId}-food`, type: "food", title: "Restauration", items: [] },
+        { id: `${newId}-hotel`, type: "hotel", title: "Hôtel", items: [] },
+      ],
+    };
+
+    setOrderedDestinations((current) => [...current, destination]);
+    setSelectedId(newId);
+    setActiveCategoryId(`${newId}-admin`);
+  }
+
+  function deleteDestination(id) {
+    setOrderedDestinations((current) =>
+      current.filter((destination) => destination.id !== id)
+    );
+
+    if (selectedId === id) {
+      setSelectedId(null);
+      setActiveCategoryId(null);
+    }
+  }
+
+  function updateDestination(id, patch) {
+    setOrderedDestinations((current) =>
+      current.map((destination) =>
+        destination.id === id
+          ? {
+              ...destination,
+              ...patch,
+              lat: patch.lat !== undefined ? Number(patch.lat) : destination.lat,
+              lng: patch.lng !== undefined ? Number(patch.lng) : destination.lng,
+            }
+          : destination
+      )
+    );
+  }
+
+  function parseFrenchDate(dateString) {
+    if (!dateString) return null;
+
+    const match = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const [, day, month, year] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  function sortDestinationsByDate() {
+    setOrderedDestinations((current) =>
+      [...current].sort((a, b) => {
+        const dateA = parseFrenchDate(a.startDate || a.dates);
+        const dateB = parseFrenchDate(b.startDate || b.dates);
+
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+
+        return dateA - dateB;
+      })
+    );
+  }
+
+  async function refreshTrips() {
+    const trips = await listTrips();
+    setTripsList(trips);
+  }
+
+  async function createNewTrip() {
+    const emptyTrip = {
+      ...trip,
+      title: "Nouveau voyage",
+      dates: "",
+      departureDate: "",
+      destinations: [],
+    };
+
+    const result = await createTrip(emptyTrip);
+
+    setShareSlug(result.share_slug);
+    setEditToken(result.edit_token);
+    setOrderedDestinations([]);
+
+    await refreshTrips();
+  }
+
+  async function openTrip(slug, token) {
+    const data = await loadTrip(slug);
+
+    setShareSlug(slug);
+    setEditToken(token);
+    setOrderedDestinations(normalizeTripData(data.destinations || []));
+  }
+
+  async function removeTrip(slug, token) {
+    await deleteTrip(slug, token);
+
+    if (shareSlug === slug) {
+      setShareSlug(null);
+      setEditToken(null);
+      setOrderedDestinations([]);
+    }
+
+    await refreshTrips();
+  }
+
+  async function updateTripTitle(slug, token, newTitle) {
+    try {
+      await saveTrip(slug, token, {
+        title: newTitle,
+        destinations: orderedDestinations,
+      });
+
+      setTripsList((current) =>
+        current.map((trip) =>
+          trip.share_slug === slug
+            ? { ...trip, title: newTitle }
+            : trip
+        )
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="mx-auto max-w-6xl">
@@ -293,6 +445,57 @@ function exportTrip() {
               Copier lien édition
             </button>
           )}
+
+          <button
+            onClick={sortDestinationsByDate}
+            className="rounded-xl bg-blue-500 px-4 py-2 text-white"
+          >
+            Trier par date
+          </button>
+        </div>
+
+        <div className="mb-4 rounded-2xl bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">Mes voyages</h2>
+
+            <button
+              onClick={createNewTrip}
+              className="rounded-xl bg-black px-4 py-2 text-white"
+            >
+              + Nouveau voyage
+            </button>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {tripsList.map((savedTrip) => (
+              <div
+                key={savedTrip.share_slug}
+                className="flex items-center justify-between rounded-xl bg-slate-100 p-3"
+              >
+                <button
+                  onClick={() => openTrip(savedTrip.share_slug, savedTrip.edit_token)}
+                  className="text-left"
+                >
+                  <input
+                    value={savedTrip.title || ""}
+                    onChange={(e) =>
+                      updateTripTitle(savedTrip.share_slug, savedTrip.edit_token, e.target.value)
+                    }
+                    className="font-semibold bg-transparent outline-none"
+                    placeholder="Nom du voyage"
+                  />
+                  <p className="text-xs text-slate-500">{savedTrip.share_slug}</p>
+                </button>
+
+                <button
+                  onClick={() => removeTrip(savedTrip.share_slug, savedTrip.edit_token)}
+                  className="rounded-xl bg-red-500 px-3 py-2 text-white"
+                >
+                  Supprimer
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <TravelMap
@@ -317,6 +520,9 @@ function exportTrip() {
           onAddItem={addItem}
           onDeleteItem={deleteItem}
           onUpdateItem={updateItem}
+          onAddDestination={addDestination}
+          onDeleteDestination={deleteDestination}
+          onUpdateDestination={updateDestination}
         />
       </div>
     </div>

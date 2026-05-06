@@ -36,6 +36,8 @@ export default function DestinationCard({
   onDeleteItem,
   onUpdateItem,
   onClose,
+  onDeleteDestination,
+  onUpdateDestination,
 }) {
   const activeCategory =
     destination.categories.find((category) => category.id === activeCategoryId) ||
@@ -51,7 +53,7 @@ export default function DestinationCard({
     <aside
       onWheel={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
-      className="absolute bottom-5 right-5 top-5 z-40 flex w-[390px] max-w-[calc(100%-2.5rem)] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl"
+      className="absolute bottom-5 right-5 top-5 z-40 flex w-[410px] max-w-[calc(100%-2.5rem)] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl"
     >
       <div className="relative h-48 shrink-0">
         <img
@@ -59,15 +61,16 @@ export default function DestinationCard({
           alt={destination.city}
           className="h-full w-full object-cover"
         />
+
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
 
-        <div className="absolute right-4 top-4 flex gap-2">
+        <div className="absolute right-4 top-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={() => onToggleFavorite(destination.id)}
             className="rounded-full bg-white/90 px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm"
           >
-            {isFavorite ? "★ Favori" : "☆ Favori"}
+            {isFavorite ? "★" : "☆"}
           </button>
 
           <button
@@ -77,20 +80,73 @@ export default function DestinationCard({
           >
             Fermer
           </button>
+
+          <button
+            type="button"
+            onClick={() => onDeleteDestination(destination.id)}
+            className="rounded-full bg-red-500 px-3 py-1 text-sm font-semibold text-white shadow-sm"
+          >
+            Supprimer
+          </button>
         </div>
 
         <div className="absolute bottom-4 left-4 text-white">
           <p className="text-sm opacity-90">
-            {destination.country} · {destination.dates}
+            {destination.country || "Pays"} · {destination.dates || "Dates"}
           </p>
-          <h2 className="text-3xl font-bold">{destination.city}</h2>
+          <h2 className="text-3xl font-bold">{destination.city || "Ville"}</h2>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <p className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
-          🚆 {destination.transport}
-        </p>
+        <div className="space-y-2 rounded-2xl bg-slate-100 p-3">
+          <input
+            value={destination.city || ""}
+            onChange={(event) =>
+              onUpdateDestination(destination.id, { city: event.target.value })
+            }
+            placeholder="Ville"
+            className="w-full rounded-xl bg-white px-3 py-2 text-sm outline-none"
+          />
+
+          <input
+            value={destination.country || ""}
+            onChange={(event) =>
+              onUpdateDestination(destination.id, { country: event.target.value })
+            }
+            placeholder="Pays"
+            className="w-full rounded-xl bg-white px-3 py-2 text-sm outline-none"
+          />
+
+          <input
+            value={destination.dates || ""}
+            onChange={(event) =>
+              onUpdateDestination(destination.id, { dates: event.target.value })
+            }
+            placeholder="Dates"
+            className="w-full rounded-xl bg-white px-3 py-2 text-sm outline-none"
+          />
+
+          <input
+            value={destination.startDate || ""}
+            onChange={(e) =>
+              onUpdateDestination(destination.id, { startDate: e.target.value })
+            }
+            placeholder="Date début jj/mm/aaaa"
+            className="w-full rounded-xl bg-white px-3 py-2 text-sm"
+          />
+
+          <input
+            value={destination.transport || ""}
+            onChange={(event) =>
+              onUpdateDestination(destination.id, {
+                transport: event.target.value,
+              })
+            }
+            placeholder="Transport"
+            className="w-full rounded-xl bg-white px-3 py-2 text-sm outline-none"
+          />
+        </div>
 
         <div className="mt-3 rounded-2xl bg-slate-950 p-3 text-white">
           <p className="text-xs text-white/60">Budget estimé</p>
@@ -115,7 +171,9 @@ export default function DestinationCard({
         </div>
 
         <div
-          className={`mt-4 rounded-3xl border p-4 ${categoryTheme[activeCategory.type]}`}
+          className={`mt-4 rounded-3xl border p-4 ${
+            categoryTheme[activeCategory.type]
+          }`}
         >
           <p className="text-lg font-bold">{activeCategory.title}</p>
 
@@ -126,7 +184,7 @@ export default function DestinationCard({
               const checked = checkedItems.includes(itemKey);
 
               return (
-                <li key={index} className="flex gap-2">
+                <li key={`${activeCategory.id}-${index}`} className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => onToggleItem(itemKey)}
@@ -138,28 +196,28 @@ export default function DestinationCard({
                   </button>
 
                   <input
-                    value={item.label || ""}
+                    value={item.label}
                     onChange={(event) =>
                       onUpdateItem(destination.id, activeCategory.id, index, {
                         label: event.target.value,
                         price: item.price,
                       })
                     }
-                    className={`min-w-0 flex-1 rounded-xl px-3 py-2 bg-white ${
-                      checked ? "line-through text-slate-400" : ""
+                    className={`min-w-0 flex-1 rounded-xl bg-white px-3 py-2 outline-none ${
+                      checked ? "text-slate-400 line-through" : ""
                     }`}
                   />
 
                   <input
                     type="number"
-                    value={item.price ?? 0}
+                    value={item.price}
                     onChange={(event) =>
                       onUpdateItem(destination.id, activeCategory.id, index, {
                         label: item.label,
                         price: Number(event.target.value),
                       })
                     }
-                    className="w-24 rounded-xl px-3 py-2 bg-white"
+                    className="w-24 rounded-xl bg-white px-3 py-2 outline-none"
                   />
 
                   <button
@@ -186,8 +244,8 @@ export default function DestinationCard({
                 [newItemKey]: event.target.value,
               }))
             }
-            placeholder="Ajouter"
-            className="min-w-0 flex-1 rounded-xl px-3 py-2 bg-white"
+            placeholder="Ajouter un élément"
+            className="min-w-0 flex-1 rounded-xl bg-slate-100 px-3 py-2 outline-none"
           />
 
           <button
@@ -201,15 +259,22 @@ export default function DestinationCard({
                 [newItemKey]: "",
               }));
             }}
-            className="bg-black text-white px-3 rounded-xl"
+            className="rounded-xl bg-black px-3 py-2 font-semibold text-white"
           >
             +
           </button>
         </div>
 
-        <p className="mt-4 rounded-2xl border border-dashed p-3 text-sm text-slate-600">
-          📝 {destination.notes}
-        </p>
+        <label className="mt-4 block rounded-2xl border border-dashed p-3 text-sm text-slate-600">
+          <span className="font-semibold">Notes</span>
+          <textarea
+            value={destination.notes || ""}
+            onChange={(event) =>
+              onUpdateDestination(destination.id, { notes: event.target.value })
+            }
+            className="mt-2 min-h-24 w-full rounded-xl bg-slate-100 p-3 outline-none"
+          />
+        </label>
       </div>
     </aside>
   );
